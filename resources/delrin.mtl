@@ -1,0 +1,11 @@
+# Blender MTL File: 'None'
+# Material Count: 1
+
+newmtl delrin
+Ns 30.0
+Ka 0.4 0.4 0.4
+Kd 0.5 0.5 0.5
+Ks 0.2 0.2 0.2
+Ni 1.000000
+d 1.000000
+illum 2

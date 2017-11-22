@@ -1,0 +1,11 @@
+# Blender MTL File: 'None'
+# Material Count: 1
+
+newmtl abs
+Ns 20.0
+Ka 0.4 0.4 0.4
+Kd 0.5 0.5 0.5
+Ks 0.45 0.45 0.45
+Ni 1.000000
+d 1.000000
+illum 2
