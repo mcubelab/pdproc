@@ -1,5 +1,7 @@
 This repo contains code to process and render images of the MIT Pushing dataset.
 
+Preprocessing
+=======
 First, create a folder structure like [pushdata folder]/[surface name]/. 
 Below we will use ~/pd as the pushdata root folder, and abs as the surface.
 
@@ -18,6 +20,10 @@ This will
   * set the initial object position and orientation to zero
   * add information about the push (angle, velocity...) to the h5 data files
 
+RGB-D rendering
+=======
+The preprocessing has to be done before.
+
 To render RGB-D pictures from the preprocessed images, refer to 
 ```scripts/render_scene.py```. 
 
@@ -27,4 +33,6 @@ scripts/render_scene.py --source-folder ~/pd --out-dir .
 ```
 This will generate a series of images in jpeg in the current folder.
 
-To annotate contact modes, please refer to ```scripts/render_scene.py```
+Contact mode annotation
+=======
+To annotate contact modes, please refer to ```scripts/render_scene.py```.
