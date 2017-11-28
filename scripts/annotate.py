@@ -3,7 +3,7 @@
 """
 Created on Wed Apr 12 15:57:18 2017
 
-Annotate the dataset with contact points and normals. 
+Annotate the dataset with contact points and normals.
 
 Warining: This code is terribly slow for ellipses!
 @author: Alina Kloss
@@ -110,7 +110,7 @@ def annotate(ob, mat, num, filename, target, num_files, debug, debug_dir):
         data_in = h5py.File(filename, "r", driver='core')
         data = {}
         for key, val in data_in.iteritems():
-            data[key] = val[:]
+            data[key] = val.value
     except:
         log.exception("message")
         return None
@@ -146,8 +146,8 @@ def annotate(ob, mat, num, filename, target, num_files, debug, debug_dir):
         # we only use contact[1] if we did not find a contact point with the
         # real tip radius, but the object moved a significant distance
         elif ind != len(positions) - 1 and \
-                (np.linalg.norm(np.array(positions[ind+1][:2]) - pos) > 5e-4 or
-                 np.linalg.norm(ang - positions[ind+1][2]) > 0.001):
+                (np.linalg.norm(np.array(positions[ind+1][:2]) - pos) > 1e-4 or
+                 np.linalg.norm(ang - positions[ind+1][2]) > 1e-4):
             contacts += [contact[1].astype(np.float32)]
             if np.any(contact[1]) != 0 and np.linalg.norm(normal[1]) == 0:
                 log.warning('File ' + os.path.basename(filename) +
@@ -433,96 +433,157 @@ def get_contact_point(ob, tip, pos, rot, image_num, file_num, name,
     if 'butter' in ob:
         # the butterfly-shaped object is defined by a large number of points
         # that we load from file
-        points = pickle.load('../../resource/butter_pickle.pkl')
+        point_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                  '../../resources/butter_points.pkl')
+        points = pickle.load(open(point_file, 'r'))
         points = np.array(points)
+        points = points[:points.shape[0]-1]
 
         # since the edges between the points are very short, the tip might
         # intersect with many neighbouring segments, and we take the average of
         # all contact points and normals we found
         tmp_out = []
         tmp_norm = []
-        # to save time, we only use every fourth point and approximate the
-        # shape around it by a streigth line throuh two neighbouring points
-        for i in np.arange(0, len(points) - 2, 4):
-            start = points[i-2]
-            end = points[i+2]
+        # we approximate the shape around every second point by a straigth
+        # line throuh its two neighbouring points
+        for i in np.arange(0, len(points), 16):
+            neighbours = points[i-12].reshape(1, 2)
+            for k in np.arange(-11, 13):
+                if i + k < points.shape[0]:
+                    neighbours = np.concatenate((neighbours,
+                                                 points[i+k].reshape(1, 2)),
+                                                axis=0)
+                else:
+                    neighbours = np.concatenate((neighbours,
+                                                points[i+k-points.shape[0]].reshape(1, 2)), axis=0)
+            assert neighbours.shape[0] == 25
 
-            out = intersects_line(start, end, tip, tip_r, tip_r2)
-            if np.any(out[0]) != 0 or np.any(out[1]) != 0:
-                tmp_out += [out]
-                normal = [np.zeros((2, 1), dtype=np.float32),
-                          np.zeros((2, 1), dtype=np.float32)]
-                # if we got a contact point for the smaller radius, calculate
-                # the normal
-                if np.any(out[0]) != 0:
-                    # get the slope of the normal at this point
-                    if end[1] == start[1]:
-                        # the line runs vertially, so the normal is horizontal
-                        if out[0][0] < 0:
-                            normal[0] = np.array([[1], [0]])
+            # fit a third order polynomial to the neighbouring points for
+            # estimating normals
+            ys = neighbours[:, 1:]
+            xs = neighbours[:, 0:1]
+
+            # we have to check if the points are ordered in x or y
+            def is_monotonic(x):
+                return all(x[i] <= x[i+1] for i in xrange(len(x)-1)) or \
+                    all(x[i] >= x[i+1] for i in xrange(len(x)-1))
+            x_ordered = is_monotonic(xs)
+            y_ordered = is_monotonic(ys)
+            if x_ordered:
+                x = np.concatenate([np.ones((25, 1)), xs, xs**2, xs**3],
+                                     axis=1)
+                coeffs_x = np.dot(np.linalg.pinv(x), ys)
+                error_x = np.sum(np.abs(ys - np.dot(x, coeffs_x)))
+            if y_ordered:
+                y = np.concatenate([np.ones((25, 1)), ys, ys**2, ys**3],
+                                    axis=1)
+                coeffs_y = np.dot(np.linalg.pinv(y), xs)
+                error_y = np.sum(np.abs(xs - np.dot(y, coeffs_y)))
+
+            if x_ordered and y_ordered:
+                # use the better fit
+                if error_x < error_y:
+                    coeffs = coeffs_x
+                    x_order = True
+                else:
+                    coeffs = coeffs_y
+                    x_order = False
+            elif x_ordered:
+                coeffs = coeffs_x
+                x_order = True
+            elif y_ordered:
+                coeffs = coeffs_y
+                x_order = False
+            else:
+                log.error('values are not monotonic!')
+
+            # collect possible contact points by linear approximation
+            for l in np.arange(3, 22):
+                start = neighbours[l-1].reshape(tip.shape)
+                end = neighbours[l+1].reshape(tip.shape)
+
+                # if the middle point of the segment doesn't lie near the tip,
+                # wemove on
+                if np.linalg.norm(neighbours[l].reshape(tip.shape) - tip) > 2 * tip_r2:
+                    continue
+
+                out = intersects_line(start, end, tip, tip_r, tip_r2)
+                if np.any(out[0]) != 0 or np.any(out[1]) != 0.:
+                    tmp_out += [out]
+                    normal = [np.zeros((2, 1), dtype=np.float32),
+                              np.zeros((2, 1), dtype=np.float32)]
+
+                    # if we got a contact point for the smaller radius,
+                    # calculate the normal
+                    if np.any(out[0]) != 0.:
+                        if x_order:
+                            # get the slope of the normal at this point
+                            m = coeffs[1] + coeffs[2]*2*out[0][0] + coeffs[3]*3*out[0][0]**2
+                            m = -1./m[0]
+                            # the normal points to the object centre
+                            if out[0][1] < 0:
+                                normal[0] = np.array([[np.sign(m)],
+                                                      [np.abs(m)]])
+                            else:
+                                normal[0] = np.array([[-np.sign(m)],
+                                                      [-np.abs(m)]])
                         else:
-                            normal[0] = np.array([[-1], [0]])
-                    elif end[0] == start[0]:
-                        # the line runs horizontally, so the normal is vertical
-                        if out[0][1] < 0:
-                            normal[0] = np.array([[0], [1]])
+                            m = coeffs[1] + coeffs[2]*2*out[0][1] + coeffs[3]*3*out[0][1]**2
+                            m = -1./m[0]
+                            # the normal points to the object centre
+                            if out[0][0] < 0:
+                                normal[0] = np.array([[np.abs(m)],
+                                                      [np.sign(m)]])
+                            else:
+                                normal[0] = np.array([[-np.abs(m)],
+                                                      [-np.sign(m)]])
+                    # same for the bigger tip radius
+                    if np.any(out[1]) != 0.:
+                        if x_order:
+                            m = coeffs[1] + coeffs[2]*2*out[1][0] + coeffs[3]*3*out[1][0]**2
+                            m = -1./m[0]
+                            # the normal points to the object centre
+                            if out[1][1] < 0:
+                                normal[1] = np.array([[np.sign(m)],
+                                                      [np.abs(m)]])
+                            else:
+                                normal[1] = np.array([[-np.sign(m)],
+                                                      [-np.abs(m)]])
                         else:
-                            normal[0] = np.array([[0], [-1]])
-                    else:
-                        if (start[0] > end[0]):
-                            m = - (start[0] - end[0]) / (start[1] - end[1])
-                        else:
-                            m = - (end[0] - start[0]) / (end[1] - start[1])
-                        # the normal points to the object centre
-                        if out[0][0] < 0:
-                            normal[0] = np.array([[1], [m]])
-                        else:
-                            normal[0] = np.array([[-1], [-m]])
-                # same for the bigger tip radius
-                if np.any(out[1]) != 0:
-                    if end[1] == start[1]:
-                        if out[1][0] < 0:
-                            normal[1] = np.array([[1], [0]])
-                        else:
-                            normal[1] = np.array([[-1], [0]])
-                    elif end[0] == start[0]:
-                        if out[1][1] < 0:
-                            normal[1] = np.array([[0], [1]])
-                        else:
-                            normal[1] = np.array([[0], [-1]])
-                    else:
-                        if (start[0] > end[0]):
-                            m = - (start[0] - end[0]) / (start[1] - end[1])
-                        else:
-                            m = - (end[0] - start[0]) / (end[1] - start[1])
-                        if out[1][0] < 0:
-                            normal[1] = np.array([[1], [m]])
-                        else:
-                            normal[1] = np.array([[-1], [-m]])
-                tmp_norm += [normal]
-        # average over the results in tmp
+                            m = coeffs[1] + coeffs[2]*2*out[1][1] + coeffs[3]*3*out[1][1]**2
+                            m = -1./m[0]
+                            # the normal points to the object centre
+                            if out[1][0] < 0:
+                                normal[1] = np.array([[np.abs(m)],
+                                                      [np.sign(m)]])
+                            else:
+                                normal[1] = np.array([[-np.abs(m)],
+                                                      [-np.sign(m)]])
+
+                    tmp_norm += [normal]
+
         out = [np.zeros((2, 1), dtype=np.float32),
                np.zeros((2, 1), dtype=np.float32)]
         normal = [np.zeros((2, 1), dtype=np.float32),
                   np.zeros((2, 1), dtype=np.float32)]
-        count0 = 0
-        count1 = 0
+
+        # we use the contact point that is farthest away from the tip = closest
+        # to the tip's border
+        max1 = 0.
+        max2 = 0.
         for ind, el in enumerate(tmp_out):
             if np.any(el[0]) != 0:
-                count0 += 1
-                out[0] += el[0]
-                normal[0] += tmp_norm[ind][0]
+                dist = np.linalg.norm(el[0] - tip)
+                if dist > max1:
+                    max1 = dist
+                    out[0] = el[0]
+                    normal[0] = tmp_norm[ind][0]
             if np.any(el[1]) != 0:
-                count1 += 1
-                out[1] += el[1]
-                normal[1] += tmp_norm[ind][1]
-        if count0 != 0:
-            out[0] /= count0
-            normal[0] /= count0
-        if count1 != 0:
-            out[1] /= count1
-            normal[1] /= count1
-
+                dist = np.linalg.norm(el[1] - tip)
+                if dist > max2:
+                    max2 = dist
+                    out[1] = el[1]
+                    normal[1] = tmp_norm[ind][1]
         if debug:
             ax.add_patch(p.Polygon(points, alpha=0.2,
                                    facecolor='b', edgecolor='b'))
@@ -598,16 +659,23 @@ def intersects_line(p1, p2, tip, tip_r, tip_r2):
         c2x = expr_line_circle_x[1].subs(vals)
         c1y = expr_line_circle_y[0].subs(vals)
         c2y = expr_line_circle_y[1].subs(vals)
+
+        count = 0.
         if not c1x.is_Boolean and c1x.is_real:
             c1[0] = c1x.evalf()
             c1[1] = c1y.evalf()
+            count += 1.
         if not c2x.is_Boolean and c2x.is_real:
             c2[0] = c2x.evalf()
             c2[1] = c2y.evalf()
+            count += 1.
 
         # most of the time, the circle will intersect the line in two places,
         # and the real contact point is in the middle between them
-        contact1 = (c1 + c2) / 2
+        if count > 0:
+            contact1 = (c1 + c2) / count
+        else:
+            contact1 = (c1 + c2)
         if np.any(contact1) != 0:
             contact1 += tip
 
@@ -619,14 +687,20 @@ def intersects_line(p1, p2, tip, tip_r, tip_r2):
         c2x = expr_line_circle_x[1].subs(vals)
         c1y = expr_line_circle_y[0].subs(vals)
         c2y = expr_line_circle_y[1].subs(vals)
+        count = 0.
         if not c1x.is_Boolean and c1x.is_real:
             c1[0] = c1x.evalf()
             c1[1] = c1y.evalf()
+            count += 1.
         if not c2x.is_Boolean and c2x.is_real:
             c2[0] = c2x.evalf()
             c2[1] = c2y.evalf()
+            count += 1.
 
-        contact2 = (c1 + c2) / 2
+        if count > 0:
+            contact2 = (c1 + c2) / count
+        else:
+            contact2 = (c1 + c2)
         if np.any(contact2) != 0:
             contact2 += tip
     else:
@@ -652,17 +726,26 @@ def intersects_line(p1, p2, tip, tip_r, tip_r2):
 
     # if an intersection was found, we need to make sure that it lies on the
     # line segment
+    # exception: if the full line segment lies inside of the tip, we count the
+    # contact point as well (this only happens for the very short segments of
+    # the butter object)
     if np.any(contact1) != 0:
-        if contact1[0, 0] > max(p1[0, 0], p2[0, 0]) + 1e-5 \
-                or contact1[0, 0] < min(p1[0, 0], p2[0, 0]) - 1e-5 \
-                or contact1[1, 0] > max(p1[1, 0], p2[1, 0]) + 1e-5 \
-                or contact1[1, 0] < min(p1[1, 0], p2[1, 0]) - 1e-5:
+        inside = np.linalg.norm(p1 - tip) < tip_r and \
+            np.linalg.norm(p2 - tip) < tip_r
+        if not inside and \
+                (contact1[0, 0] > max(p1[0, 0], p2[0, 0]) + 1e-5 or
+                 contact1[0, 0] < min(p1[0, 0], p2[0, 0]) - 1e-5 or
+                 contact1[1, 0] > max(p1[1, 0], p2[1, 0]) + 1e-5 or
+                 contact1[1, 0] < min(p1[1, 0], p2[1, 0]) - 1e-5):
             contact1 = np.zeros((2, 1), dtype=np.float32)
     if np.any(contact2) != 0:
-        if contact2[0] > max(p1[0], p2[0]) + 1e-5 \
-                or contact2[0] < min(p1[0], p2[0]) - 1e-5 \
-                or contact2[1] > max(p1[1], p2[1]) + 1e-5 \
-                or contact2[1] < min(p1[1], p2[1]) - 1e-5:
+        inside = np.linalg.norm(p1 - tip) < tip_r2 and \
+            np.linalg.norm(p2 - tip) < tip_r2
+        if not inside and \
+                (contact2[0, 0] > max(p1[0, 0], p2[0, 0]) + 1e-5 or
+                 contact2[0, 0] < min(p1[0, 0], p2[0, 0]) - 1e-5 or
+                 contact2[1, 0] > max(p1[1, 0], p2[1, 0]) + 1e-5 or
+                 contact2[1, 0] < min(p1[1, 0], p2[1, 0]) - 1e-5):
             contact2 = np.zeros((2, 1), dtype=np.float32)
 
     return [contact1, contact2]

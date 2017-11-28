@@ -6,47 +6,47 @@ Created on Mon Oct 31 10:38:55 2016
 @author: Alina Kloss (main author)
 @author: Peter KT Yu (minor revision)
 
-A class, Scene, for rendering depth and rgb images for the MIT push 
-dataset to a simple scene that consists of a flat surface, the object 
+A class, Scene, for rendering depth and rgb images for the MIT push
+dataset to a simple scene that consists of a flat surface, the object
 and optionally a cylinder representing the pusher.
 
 Parameters of the constructor:
     param: a dictionary with following optional arguments
         width: the width of the output images   [default: 640]
         height: the height of the output images [default: 480]
-        
-        resource_path: the path to the folder named "resources", which 
-                       contains resource files such as object meshes and 
+
+        resource_path: the path to the folder named "resources", which
+                       contains resource files such as object meshes and
                        textures
-                       
-        ground_w: the width of the surface upon which the object is 
+
+        ground_w: the width of the surface upon which the object is
                   rendered in meters           [default: 0.6]
-        ground_d: the depth (height) of the surface upon which the 
+        ground_d: the depth (height) of the surface upon which the
                   object is rendered in meters [default: 0.5]
-                  
-        camera_pos: a list of [x,y,z] describing an the camera position 
+
+        camera_pos: a list of [x,y,z] describing an the camera position
                     in meters [default: [0, 0, 0.6]]
-                    
-        texture_files: a list of names of texture files to be loaded. 
-                       If not supplied, all texture files in the 
+
+        texture_files: a list of names of texture files to be loaded.
+                       If not supplied, all texture files in the
                        resource folder will be loaded [default: []]
-                       
-        object_files: a list of names of object meshes to be loaded. 
-                      If not supplied, all meshes in the resource folder 
+
+        object_files: a list of names of object meshes to be loaded.
+                      If not supplied, all meshes in the resource folder
                       will be loaded [default: []]
-                      
+
         shadows: activates shadows in the rgb image [default: True]
-        
+
 Usage:
     After initializing a Scene object, call draw(...) with desired scene
     parameters to generate an RGB-D image.
-    
-    You can change the camera location between calls to draws by using 
+
+    You can change the camera location between calls to draws by using
     set_camera().
-    
+
     Both set_camera() and get_world_2_cam() return the transformation matrix
     for transforming a 3d point in world coordinates to camera coordinates.
-    
+
     Use close() to destroy the rendering context when you're done using the
     Scene object.
 
@@ -56,19 +56,19 @@ Notes:
     Object Meshes (in .obj format), textures and materials must be supplied
     in the resource folder. All files in this folder will be automatically
     loaded on initialization.
-        
+
     Shadows are still experimental and artifacts may appear, especially for
     extreme camera angle or light position. Contributions are welcome!
-    
-    If the shadows look bad for your specific camera setting, try 
-    experimenting with different ways to compute the "bias" variable in 
-    ShadowCalculation(). Higher bias will help against "shadow acne" 
-    (weird artifacts), but might cause "peter-panning" (shadows don't 
+
+    If the shadows look bad for your specific camera setting, try
+    experimenting with different ways to compute the "bias" variable in
+    ShadowCalculation(). Higher bias will help against "shadow acne"
+    (weird artifacts), but might cause "peter-panning" (shadows don't
     connect to their casters).
-    
-    The camera will always look at (0, 0, 0), and the scene is rendered 
-    onto the camera's x-y plane. The z-coordinate thus determines the 
-    height of the camera relative to the surface and should therefore 
+
+    The camera will always look at (0, 0, 0), and the scene is rendered
+    onto the camera's x-y plane. The z-coordinate thus determines the
+    height of the camera relative to the surface and should therefore
     not be smaller than 0.1. Setting non-zero x and y coordinates.
 
 References:
@@ -922,6 +922,7 @@ class Scene:
             gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
             gl.glDisableClientState(gl.GL_TEXTURE_COORD_ARRAY)
 
+
 def demo(argv=None):
     """
     Demo: For each object, draws a random datafile from the push dataset and
@@ -940,7 +941,8 @@ def demo(argv=None):
     parser.add_argument('--out-dir', dest='out_dir', type=str,
                         help='Where to store the images.')
     parser.add_argument('--resource-dir', dest='resource_dir', type=str,
-                        default='resources/',
+                        default=os.path.join(os.path.dirname(__file__),
+                                             '../resources'),
                         help='where to find textures etc')
     parser.add_argument('--shadows', dest='shadows', type=str,
                         default=True, help='render with shadows?')
@@ -949,12 +951,12 @@ def demo(argv=None):
 
     ps = Scene({'resource_path': args.resource_dir,
                 'ground_d': 0.5, 'ground_w': 0.6, 'shadows': args.shadows})
-    
+
     #all objects and surfaces:
     #obs = ['ellip1', 'ellip2', 'ellip3', 'rect1', 'rect2', 'rect3',
     #       'tri1', 'tri2', 'tri3', 'butter', 'hex']
     #surfaces = ['delrin', 'abs', 'pu', 'plywood']
-    
+
     # Single example
     obs = ['rect1']
     surfaces = ['abs']

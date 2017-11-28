@@ -6,14 +6,16 @@ Created on Wed Nov  9 12:35:54 2016
 @author: Alina Kloss
     code mostly copied from
     https://github.com/peterkty/pnpush/blob/master/catkin_ws/src/pnpush_planning/src/analyze/extract_data_training.py
-    
+
     This code preprocesses the hdf5 files of the pushing dataset.
 
     Input:
         source_dir: Top-level directory with one subfolder for each
             surface material. In each surface folder, there needs to be one
-            zip archive for each object, containing hdf5 files.
-            For example, download rect1_h5.zip to ~/pd/abs/rect1_h5.zip. 
+            folder for each object with zip archive containing hdf5 files.
+            For example ~/pd/abs/rect1/rect1_h5.zip. You should get this
+            structure automatically when you download (and unzip) the archives
+            for the different surface materials into the same folder.
             Here, source_dir is ~/pd.
         out_dir: Optional, output preprocessed data to a different location
         frequency: Desired frequency for resampling the data during
@@ -82,15 +84,23 @@ class Preprocess:
         surfaces = [os.path.join(self.source_dir, f)
                     for f in os.listdir(self.source_dir) if
                     os.path.isdir(os.path.join(self.source_dir, f))]
+
         for s in surfaces:
             self.log.info(s)
             surface_name = os.path.basename(s)
 
-            # collect the .zip files for the objects
-            datafiles = [os.path.join(s, f) for f in os.listdir(s) if
-                         f.endswith('zip') and 'h5' in f]
+            # object folders
+            objects = [os.path.join(s, f) for f in os.listdir(s) if
+                       os.path.isdir(os.path.join(s, f))]
 
-            # unzip the object folders
+            # each object folder contains zipped json, h5 and png files
+            # we want the h5 files
+            datafiles = []
+            for o in objects:
+                datafiles += [os.path.join(o, f) for f in os.listdir(o) if
+                              f.endswith('zip') and 'h5' in f]
+
+            # unzip the object folders into the surface-directory
             for d in datafiles:
                 data_name = os.path.basename(d)
                 data_name = data_name[:data_name.find('.')]
@@ -107,38 +117,23 @@ class Preprocess:
                          if os.path.isdir(os.path.join(s, f)) and
                          f.endswith('h5')]
 
-            # delete old data in the output directory
-            out = os.path.join(self.out_dir, surface_name)
-            if not os.path.exists(out):
-                os.mkdir(out)
-            else:
-                out_folders = [os.path.join(out, f) for f in os.listdir(out)
-                               if not (f.endswith('zip') or f.endswith('h5'))]
-                for f in out_folders:
-                    shutil.rmtree(f)
+            surface_out = os.path.join(self.out_dir, surface_name)
+            if not os.path.exists(surface_out):
+                os.mkdir(surface_out)
 
             for d in datafiles:
                 # each directory corresponds to one object type
                 data_name = os.path.basename(d)
                 object_name = data_name[:data_name.find('_')]
 
-                # make a new directory
-                target = os.path.join(out, object_name)
+                # make a new directory for the object if necessary
+                target = os.path.join(surface_out, object_name)
                 if not os.path.exists(target):
-                    shutil.os.makedirs(target)
-                else:
-                    shutil.rmtree(target)
                     shutil.os.makedirs(target)
 
                 # get all the datafiles
-                if surface_name == 'pu':
-                    #TODO This is obsolete if the folder structure for pu is changed
-                    tmp = os.path.join(d, os.listdir(d)[0])
-                    filenames = [os.path.join(tmp, f) for f in os.listdir(tmp)
-                                 if f.endswith('h5')]
-                else:
-                    filenames = [os.path.join(d, f) for f in os.listdir(d) if
-                                 f.endswith('h5')]
+                filenames = [os.path.join(d, f) for f in os.listdir(d) if
+                             f.endswith('h5')]
 
                 self.log.info('Preprocessing data for ' + d)
                 for i, f in enumerate(filenames):
@@ -291,7 +286,7 @@ class Preprocess:
             if ind != 0 and np.abs(diff) > thresh:
                 # a jump by 2 pi is no problem due to the periodicity
                 if np.abs(np.abs(diff) - (2 * np.pi)) > thresh:
-                    # if the jump is close to a multiple of pi, it's a tracking 
+                    # if the jump is close to a multiple of pi, it's a tracking
                     # error and we correct it
                     if np.abs(diff - np.pi/2) < thresh:  # 90
                         data['object'][ind][-1] = a + np.pi/2
@@ -472,7 +467,6 @@ class Preprocess:
         object_poses_2d_interp = object_poses_2d_interp.ix[start_:end_]
         object_poses_2d_interp_list = object_poses_2d_interp.values.tolist()
 
-
         force_dt = pd.to_datetime(np.array(force_2d)[:, 0].tolist(), unit='s')
         force_2d = pd.DataFrame(np.array(force_2d)[:, 1:3].tolist(),
                                 index=force_dt)
@@ -523,6 +517,15 @@ class Preprocess:
             p = np.dot(rot, p)
             # subtract the initial orientation
             a = (pos[2] - ang)
+
+            # this could take the orientation out of [-pi, pi] again, so we
+            # readjust
+            if a < -np.pi:
+                a += 2 * np.pi
+            elif a > np.pi:
+                a -= 2 * np.pi
+            assert (a >= -np.pi and a <= np.pi), \
+                ('after zero: ' + str(a) + ' ' + str(ang) + ' ' + str(pos[2]))
             new_data['object'][i, :2] = p[:2].astype(np.float32)
             new_data['object'][i, 2] = a.astype(np.float32)
 
