@@ -2,11 +2,13 @@ This repo contains code to process and render images of the MIT Pushing dataset.
 
 Preprocessing
 =======
-First, create a folder structure like [pushdata folder]/[surface name]/. 
-Below we will use ~/pd as the pushdata root folder, and abs as the surface.
+First, create a folder structure like [pushdata folder]/[surface name]/ by 
+downloading the zip-files for each surface to [pushdata folder]/ and unzipping 
+them there. This should result in a folder structure like this:
+[pushdata folder]/[surface name]/[object name]/[object_name]_h5.zip
 
-Download the zip files of h5 format from mcube.mit.edu/push-dataset to the folders.
-I.e. The data of rect1 on ABS surface will be at ~/pd/abs/rect1_h5.zip.
+Below we will use ~/pd as the pushdata root folder.
+For example, the data of rect1 on ABS surface will be at ~/pd/abs/rect1/rect1_h5.zip.
 
 First preprocess the data using 
 ```
@@ -19,6 +21,11 @@ This will
   * synchronize the data by resampling to a given frequency
   * set the initial object position and orientation to zero
   * add information about the push (angle, velocity...) to the h5 data files
+
+This will save all the preprocessed h5 files for object [object_name] on 
+surface [surface_name] to ~/pd/[surface name]/[object name]. 
+If you want to write output to another directory than the source directory 
+(~/pd), you can specify this with the --out-dir argument. 
 
 RGB-D rendering
 =======
@@ -33,6 +40,7 @@ scripts/render_scene.py --source-folder ~/pd --out-dir .
 ```
 This will generate a series of images in jpeg in the current folder.
 
-Contact mode annotation
+Contact annotation
 =======
-To annotate contact modes, please refer to ```scripts/render_scene.py```.
+To annotate the preprocessed h5 files with contact points and surface normals, 
+please refer to ```scripts/render_scene.py```.
