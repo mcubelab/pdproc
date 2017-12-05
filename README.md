@@ -7,8 +7,8 @@ downloading the zip-files for each surface to [pushdata folder]/ and unzipping
 them there. This should result in a folder structure like this:
 [pushdata folder]/[surface name]/[object name]/[object_name]_h5.zip
 
-Below we will use ~/pd as the pushdata root folder.
-For example, the data of rect1 on ABS surface will be at ~/pd/abs/rect1/rect1_h5.zip.
+Below we will use \~/pd as the pushdata root folder.
+For example, the data of rect1 on ABS surface will be at \~/pd/abs/rect1/rect1_h5.zip.
 
 First preprocess the data using 
 ```
@@ -23,9 +23,9 @@ This will
   * add information about the push (angle, velocity...) to the h5 data files
 
 This will save all the preprocessed h5 files for object [object_name] on 
-surface [surface_name] to ~/pd/[surface name]/[object name]. 
+surface [surface_name] to \~/pd/[surface name]/[object name]. 
 If you want to write output to another directory than the source directory 
-(~/pd), you can specify this with the --out-dir argument. 
+(\~/pd), you can specify this with the --out-dir argument. 
 
 RGB-D rendering
 =======
