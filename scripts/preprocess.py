@@ -446,9 +446,9 @@ class Preprocess:
         o_in = filter(lambda x: x[0] > starttime and x[0] < endtime,
                       object_poses_2d)
         t_in = filter(lambda x: x[0] > starttime and x[0] < endtime,
-                      object_poses_2d)
+                      tip_poses_2d)
         f_in = filter(lambda x: x[0] > starttime and x[0] < endtime,
-                      object_poses_2d)
+                      force_2d)
         if np.abs(len(o_in) - len(f_in)) > 20 or  \
                 np.abs(len(f_in) - len(t_in)) > 20 or \
                 np.abs(len(t_in) - len(o_in)) > 20:
