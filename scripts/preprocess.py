@@ -45,6 +45,7 @@ import pandas as pd
 import zipfile
 import shutil
 import logging
+import csv
 
 
 class Preprocess:
@@ -551,8 +552,8 @@ class Preprocess:
 
         # rotate the force vectors
         for i, f in enumerate(data['force']):
-            # get the vector from initial position to force
-            p = np.array(f)[:2] - init_ob_pose[:2]
+            # get the linear force vector
+            p = np.array(f)[:2]
             # rotate
             p = np.dot(rot, p)
             out = np.array([p[0], p[1], np.array(f)[2]])
