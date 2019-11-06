@@ -1,4 +1,4 @@
-This repo contains code to process and render images of the MIT Pushing dataset.
+This repo contains code to process and render images of the MIT Pushing dataset (http://web.mit.edu/mcube//push-dataset/).
 
 Preprocessing
 =======
